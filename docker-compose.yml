@@ -1,0 +1,57 @@
+# NanoClaw — Elestio / self-hosted Docker Compose deployment
+#
+# Deploy on Elestio:
+#   1. Create a "Custom Docker Compose" service on Elestio
+#   2. Point it to this repo (or paste this file)
+#   3. Set environment variables in Elestio dashboard
+#   4. Deploy — Elestio provisions a VM with Docker pre-installed
+#
+# The orchestrator spawns agent containers via the Docker socket.
+# The agent image is built on first start via the init container.
+
+services:
+  # One-time init: build the agent container image on the host
+  agent-build:
+    image: docker:27-cli
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./container:/build-context
+    working_dir: /build-context
+    command: >
+      sh -c "
+        echo 'Building nanoclaw-agent image...' &&
+        docker build -t nanoclaw-agent:latest . &&
+        echo 'Agent image ready.'
+      "
+    restart: "no"
+
+  # Main NanoClaw orchestrator
+  nanoclaw:
+    build: .
+    depends_on:
+      agent-build:
+        condition: service_completed_successfully
+    volumes:
+      # Docker socket — allows spawning agent containers
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Persistent data
+      - nanoclaw-store:/app/store
+      - nanoclaw-data:/app/data
+      - nanoclaw-groups:/app/groups
+      - nanoclaw-logs:/app/logs
+      # .env file (mounted from host)
+      - ./.env:/app/.env:ro
+    environment:
+      - ASSISTANT_NAME=${ASSISTANT_NAME:-Andy}
+      - TZ=${TZ:-UTC}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - CONTAINER_TIMEOUT=${CONTAINER_TIMEOUT:-1800000}
+      - MAX_CONCURRENT_CONTAINERS=${MAX_CONCURRENT_CONTAINERS:-5}
+      - CREDENTIAL_PROXY_HOST=0.0.0.0
+    restart: unless-stopped
+
+volumes:
+  nanoclaw-store:
+  nanoclaw-data:
+  nanoclaw-groups:
+  nanoclaw-logs:

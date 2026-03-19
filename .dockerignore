@@ -1,0 +1,14 @@
+node_modules
+dist
+store
+data
+groups
+logs
+.env
+*.keys.json
+.git
+.DS_Store
+.idea
+.vscode
+.nanoclaw
+agents-sdk-docs
